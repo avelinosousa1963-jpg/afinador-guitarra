@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Afinador de Guitarra</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0b0b12;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .container { width: 100%; max-width: 460px; padding: 20px; text-align: center; }
+        h1 { font-size: 1.1rem; font-weight: 400; letter-spacing: 6px; text-transform: uppercase; color: #555; margin-bottom: 25px; }
+
+        .gauge-wrapper { position: relative; width: 280px; height: 150px; margin: 0 auto 5px; }
+        .gauge-svg { width: 100%; height: 100%; }
+        .needle {
+            position: absolute; bottom: 8px; left: 50%; width: 3px; height: 120px;
+            background: #fff; border-radius: 2px; transform-origin: bottom center;
+            transform: translateX(-50%) rotate(0deg);
+            transition: transform 0.12s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 2; box-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+        .needle.in-tune { background: #00e676; box-shadow: 0 0 15px rgba(0,230,118,0.6); }
+        .needle.sharp { background: #ff5252; box-shadow: 0 0 15px rgba(255,82,82,0.5); }
+        .needle.flat { background: #ffab40; box-shadow: 0 0 15px rgba(255,171,64,0.5); }
+        .center-dot { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; background: #fff; border-radius: 50%; z-index: 3; }
+        .gauge-labels { display: flex; justify-content: space-between; padding: 0 20px; font-size: 0.65rem; color: #444; letter-spacing: 1px; margin-top: 2px; }
+
+        .leds { display: flex; justify-content: center; gap: 5px; margin: 15px 0 10px; }
+        .led { width: 7px; height: 7px; border-radius: 50%; background: #1a1a25; transition: all 0.15s; }
+        .led.on-left { background: #ffab40; box-shadow: 0 0 6px #ffab40; }
+        .led.on-center { background: #00e676; box-shadow: 0 0 8px #00e676; }
+        .led.on-right { background: #ff5252; box-shadow: 0 0 6px #ff5252; }
+
+        .note-display { min-height: 70px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .note-name { font-size: 4rem; font-weight: 700; line-height: 1; color: #fff; transition: color 0.15s; }
+        .note-name.in-tune { color: #00e676; }
+        .note-name.sharp { color: #ff5252; }
+        .note-name.flat { color: #ffab40; }
+        .cents-text { font-size: 1rem; font-weight: 400; margin-top: 4px; font-variant-numeric: tabular-nums; color: #666; }
+        .cents-text.in-tune { color: #00e676; font-weight: 600; }
+        .freq-text { font-size: 0.75rem; color: #333; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+        .strings { display: flex; justify-content: center; gap: 6px; margin: 20px 0; flex-wrap: wrap; }
+        .string-btn {
+            width: 48px; height: 48px; border: 2px solid #2a2a35; border-radius: 10px; background: #12121a;
+            color: #777; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .string-btn small { font-size: 0.45rem; font-weight: 300; color: #555; margin-top: 2px; }
+        .string-btn:hover { border-color: #444; color: #bbb; }
+        .string-btn:active { transform: scale(0.95); }
+        .string-btn.active { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.08); }
+        .string-btn.matching { border-color: #00e676; background: rgba(0,230,118,0.15); box-shadow: 0 0 15px rgba(0,230,118,0.2); }
+
+        .main-btn {
+            padding: 14px 36px; font-size: 0.85rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+            border: none; border-radius: 50px; cursor: pointer; transition: all 0.3s;
+            background: linear-gradient(135deg, #00e676, #00c853); color: #000;
+            box-shadow: 0 4px 15px rgba(0,230,118,0.25);
+        }
+        .main-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,230,118,0.35); }
+        .main-btn.listening { background: linear-gradient(135deg, #ff5252, #d32f2f); color: #fff; box-shadow: 0 4px 15px rgba(255,82,82,0.25); }
+
+        .status { font-size: 0.75rem; color: #444; margin-top: 12px; min-height: 18px; }
+        .ref-row { margin-top: 25px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.7rem; color: #444; }
+        .ref-row input { width: 48px; padding: 4px; background: #12121a; border: 1px solid #2a2a35; border-radius: 5px; color: #888; font-size: 0.75rem; text-align: center; }
+        .ref-row input:focus { outline: none; border-color: #444; }
+        
+        .mobile-notice {
+            display: none; margin: 15px 0; padding: 10px; background: #1a1a25; border-radius: 8px;
+            font-size: 0.75rem; color: #ffab40; line-height: 1.4;
+        }
+        @media (max-width: 768px) { .mobile-notice { display: block; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Afinador</h1>
+
+        <div class="gauge-wrapper">
+            <svg class="gauge-svg" viewBox="0 0 280 145">
+                <defs>
+                    <linearGradient id="flatGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#ffab40"/><stop offset="100%" stop-color="#00e676"/>
+                    </linearGradient>
+                    <linearGradient id="sharpGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#00e676"/><stop offset="100%" stop-color="#ff5252"/>
+                    </linearGradient>
+                </defs>
+                <path d="M 25 135 A 115 115 0 0 1 255 135" fill="none" stroke="#151520" stroke-width="12" stroke-linecap="round"/>
+                <path d="M 25 135 A 115 115 0 0 1 140 20" fill="none" stroke="url(#flatGrad)" stroke-width="12" stroke-linecap="round" opacity="0.4"/>
+                <path d="M 140 20 A 115 115 0 0 1 255 135" fill="none" stroke="url(#sharpGrad)" stroke-width="12" stroke-linecap="round" opacity="0.4"/>
+                <line x1="140" y1="30" x2="140" y2="38" stroke="#00e676" stroke-width="2.5"/>
+                <line x1="88" y1="40" x2="92" y2="48" stroke="#888" stroke-width="1.5"/>
+                <line x1="192" y1="40" x2="188" y2="48" stroke="#888" stroke-width="1.5"/>
+                <line x1="50" y1="72" x2="55" y2="76" stroke="#ffab40" stroke-width="1.5"/>
+                <line x1="230" y1="72" x2="225" y2="76" stroke="#ff5252" stroke-width="1.5"/>
+                <text x="140" y="122" text-anchor="middle" fill="#333" font-size="9" font-family="system-ui">AFINADO</text>
+            </svg>
+            <div class="needle" id="needle"></div>
+            <div class="center-dot"></div>
+        </div>
+        <div class="gauge-labels"><span>BEMOL</span><span>SUSTENIDO</span></div>
+
+        <div class="leds" id="leds">
+            <div class="led"></div><div class="led"></div><div class="led"></div><div class="led"></div><div class="led"></div>
+            <div class="led" id="centerLed"></div>
+            <div class="led"></div><div class="led"></div><div class="led"></div><div class="led"></div><div class="led"></div>
+        </div>
+
+        <div class="note-display">
+            <div class="note-name" id="noteName">--</div>
+            <div class="cents-text" id="centsText">Toca uma corda...</div>
+            <div class="freq-text" id="freqText"></div>
+        </div>
+
+        <div class="strings" id="stringsContainer">
+            <button class="string-btn" data-note="E" data-octave="2">E<small>6ª</small></button>
+            <button class="string-btn" data-note="A" data-octave="2">A<small>5ª</small></button>
+            <button class="string-btn" data-note="D" data-octave="3">D<small>4ª</small></button>
+            <button class="string-btn" data-note="G" data-octave="3">G<small>3ª</small></button>
+            <button class="string-btn" data-note="B" data-octave="3">B<small>2ª</small></button>
+            <button class="string-btn" data-note="E" data-octave="4">E<small>1ª</small></button>
+        </div>
+
+        <button class="main-btn" id="startBtn">Iniciar</button>
+        <div class="status" id="status"></div>
+
+        <div class="mobile-notice">
+            📱 <strong>Nota:</strong> O microfone só funciona se a página estiver em <code>https://</code> ou <code>localhost</code>. Abre via servidor local ou GitHub Pages.
+        </div>
+
+        <div class="ref-row">
+            <span>Ref. A4:</span>
+            <input type="number" id="refPitch" value="440" min="420" max="460" step="1">
+            <span>Hz</span>
+        </div>
+    </div>
+
+    <script>
+        const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+        let audioCtx, analyser, mediaStream, isRunning = false;
+        let rafId, bufLen = 4096, buffer = new Float32Array(bufLen);
+        let refA4 = 440;
+        let smoothedCents = 0, lockedNote = null, noteLockTimer = 0;
+
+        const DOM = {
+            needle: document.getElementById('needle'),
+            noteName: document.getElementById('noteName'),
+            centsText: document.getElementById('centsText'),
+            freqText: document.getElementById('freqText'),
+            startBtn: document.getElementById('startBtn'),
+            status: document.getElementById('status'),
+            leds: document.querySelectorAll('#leds .led'),
+            refInput: document.getElementById('refPitch'),
+            strings: document.querySelectorAll('.string-btn')
+        };
+
+        function autoCorrelate(buf, sampleRate) {
+            let rms = 0;
+            for(let i=0; i<buf.length; i++) rms += buf[i]*buf[i];
+            rms = Math.sqrt(rms/buf.length);
+            if(rms < 0.012) return -1;
+
+            let r1=0, r2=buf.length-1;
+            const th = 0.2;
+            for(let i=0; i<buf.length/2; i++) { if(Math.abs(buf[i])<th){r1=i;break;} }
+            for(let i=1; i<buf.length/2; i++) { if(Math.abs(buf[buf.length-i])<th){r2=buf.length-i;break;} }
+            let trimmed = buf.slice(r1, r2);
+            const len = trimmed.length;
+            let maxVal = 0;
+            for(let v of trimmed) if(Math.abs(v)>maxVal) maxVal=Math.abs(v);
+            if(maxVal===0) return -1;
+            for(let i=0;i<len;i++) trimmed[i]/=maxVal;
+
+            let bestCorr=-1, bestLag=0;
+            const minLag = Math.floor(sampleRate/1200);
+            const maxLag = Math.floor(sampleRate/60);
+            for(let lag=minLag; lag<Math.min(len, maxLag); lag++){
+                let sum=0;
+                for(let i=0; i<len-lag; i++) sum += trimmed[i]*trimmed[i+lag];
+                if(sum > bestCorr){ bestCorr=sum; bestLag=lag; }
+            }
+
+            if(bestLag>0 && bestLag<len-1){
+                let i1=bestLag-1, i2=bestLag, i3=bestLag+1;
+                let x1=0,x2=0,x3=0;
+                for(let i=0; i<len-i3; i++){
+                    x1+=trimmed[i]*trimmed[i+i1];
+                    x2+=trimmed[i]*trimmed[i+i2];
+                    x3+=trimmed[i]*trimmed[i+i3];
+                }
+                let a=(x1+x3-2*x2)/2;
+                let b=(x3-x1)/2;
+                if(a!==0) bestLag = bestLag - b/(2*a);
+            }
+            return sampleRate / bestLag;
+        }
+
+        function freqToNote(freq) {
+            const semitones = 12 * Math.log2(freq / refA4);
+            const rounded = Math.round(semitones);
+            const cents = (semitones - rounded) * 100;
+            const midi = rounded + 69;
+            const idx = ((midi % 12) + 12) % 12;
+            const oct = Math.floor(midi/12) - 1;
+            return { name: NOTE_NAMES[idx], oct, cents, midi, freq };
+        }
+
+        function loop() {
+            if(!isRunning) return;
+            analyser.getFloatTimeDomainData(buffer);
+            const rawFreq = autoCorrelate(buffer, audioCtx.sampleRate);
+            let note = null, cents = 0, freq = 0;
+            let rms = 0;
+            for(let v of buffer) rms += v*v;
+            rms = Math.sqrt(rms/buffer.length);
+
+            if(rawFreq > 55 && rawFreq < 1200) {
+                note = freqToNote(rawFreq);
+                freq = rawFreq; cents = note.cents;
+
+                if(!lockedNote || lockedNote.name !== note.name || lockedNote.oct !== note.oct) {
+                    noteLockTimer++;
+                    if(noteLockTimer > 5) { lockedNote = note; noteLockTimer = 0; }
+                } else { noteLockTimer = 0; }
+                smoothedCents = smoothedCents * 0.75 + cents * 0.25;
+                cents = smoothedCents;
+            } else {
+                noteLockTimer = 0;
+                smoothedCents *= 0.92;
+                if(Math.abs(smoothedCents)<1) smoothedCents=0;
+                cents = smoothedCents;
+            }
+            updateUI(note, cents, freq, rms);
+            rafId = requestAnimationFrame(loop);
+        }
+
+        function updateUI(note, cents, freq, rms) {
+            const absCents = Math.abs(cents);
+            const inTune = absCents <= 4;
+            const state = inTune ? 'in-tune' : (cents > 0 ? 'sharp' : 'flat');
+
+            const clamped = Math.max(-50, Math.min(50, cents));
+            const angle = (clamped / 50) * 85;
+            DOM.needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+            DOM.needle.className = `needle ${freq > 0 ? state : ''}`;
+
+            if(note && freq > 0) {
+                DOM.noteName.innerHTML = note.name + `<span style="font-size:1.3rem;color:#666;vertical-align:super">${note.oct}</span>`;
+                DOM.noteName.className = `note-name ${state}`;
+                DOM.centsText.className = `cents-text ${state}`;
+                DOM.centsText.textContent = inTune ? '✓ AFINADO' : `${cents > 0 ? '+' : ''}${cents.toFixed(1)}¢`;
+                DOM.freqText.textContent = freq.toFixed(1) + ' Hz';
+            } else {
+                DOM.noteName.innerHTML = '--';
+                DOM.noteName.className = 'note-name';
+                DOM.centsText.className = 'cents-text';
+                DOM.centsText.textContent = 'Toca uma corda...';
+                DOM.freqText.textContent = '';
+            }
+
+            DOM.leds.forEach((led, i) => {
+                const ledCents = [-40,-25,-12,-6,-2,0,2,6,12,25,40][i];
+                let active = false;
+                if(inTune && i===5) active=true;
+                else if(!inTune && freq>0) active = Math.abs(cents-ledCents)<8;
+                led.className = 'led' + (active ? ` on-${i===5?'center':(cents<0?'left':'right')}` : '');
+            });
+
+            DOM.strings.forEach(btn => {
+                const bNote = btn.dataset.note, bOct = parseInt(btn.dataset.octave);
+                btn.classList.remove('active','matching');
+                if(note && bNote===note.name && bOct===note.oct) {
+                    btn.classList.add(inTune ? 'matching' : 'active');
+                }
+            });
+        }
+
+        DOM.startBtn.onclick = async () => {
+            if(isRunning) {
+                isRunning = false; cancelAnimationFrame(rafId);
+                if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop());
+                if(audioCtx) audioCtx.close();
+                DOM.startBtn.textContent = 'Iniciar';
+                DOM.startBtn.classList.remove('listening');
+                DOM.status.textContent = '';
+                updateUI(null,0,0,0); return;
+            }
+            try {
+                refA4 = parseInt(DOM.refInput.value) || 440;
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // 🔑 IMPRESCINDÍVEL PARA MOBILE:
+                if(audioCtx.state === 'suspended') await audioCtx.resume();
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false },
+                    video: false
+                });
+                const src = audioCtx.createMediaStreamSource(mediaStream);
+                analyser = audioCtx.createAnalyser(); analyser.fftSize = bufLen;
+                src.connect(analyser);
+                isRunning = true;
+                DOM.startBtn.textContent = 'Parar';
+                DOM.startBtn.classList.add('listening');
+                DOM.status.textContent = 'A ouvir...';
+                loop();
+            } catch(e) {
+                if(e.name==='NotAllowedError') DOM.status.textContent='❌ Permissão de microfone negada. Vai a Definições e permite.';
+                else if(e.name==='NotFoundError') DOM.status.textContent='❌ Microfone não encontrado.';
+                else DOM.status.textContent=`❌ Erro: ${e.message}`;
+                console.error(e);
+            }
+        };
+
+        DOM.refInput.onchange = () => refA4 = parseInt(DOM.refInput.value)||440;
+
+        DOM.strings.forEach(btn => btn.onclick = async () => {
+            if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+            if(audioCtx.state==='suspended') await audioCtx.resume();
+            const f = parseFloat(btn.dataset.freq) || getRefFreq(btn.dataset.note, parseInt(btn.dataset.octave));
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type='sine'; osc.frequency.value=f; gain.gain.value=0.2;
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime+1);
+            DOM.strings.forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+            DOM.status.textContent = `🎵 Ref: ${btn.dataset.note}${btn.dataset.octave} (${f.toFixed(1)}Hz)`;
+        });
+
+        function getRefFreq(name, oct) {
+            const idx = NOTE_NAMES.indexOf(name); if(idx===-1) return 440;
+            const midi = (oct+1)*12+idx;
+            return refA4 * Math.pow(2, (midi-69)/12);
+        }
+        // Populate freq attributes dynamically
+        document.querySelectorAll('.string-btn').forEach(btn => {
+            btn.dataset.freq = getRefFreq(btn.dataset.note, parseInt(btn.dataset.octave));
+        });
+    </script>
+</body>
+</html>
